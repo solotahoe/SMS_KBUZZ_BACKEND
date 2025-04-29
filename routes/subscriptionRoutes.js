@@ -1,7 +1,7 @@
 import express from 'express'
 import {
     createSubscription,
-}  from '../utils/subscriptionUtils.js';
+}  from '../services/subscriptionService.js';
 
 const router = express.Router();
 
@@ -20,6 +20,7 @@ const validateUserInput = async(req, res, next) => {
   };
   // Create a new subscription
   router.post('/create', validateUserInput, async (req, res) => {
+    console.log(req.body)
     const result = await createSubscription(req.body);
     
     if (!result.success) {

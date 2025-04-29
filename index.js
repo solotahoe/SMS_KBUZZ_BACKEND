@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import userRoutes from './routes/usersRoutes.js'
 import planRoutes from './routes/planRoutes.js'
 import subscriptionRoutes from './routes/subscriptionRoutes.js'
+import { initCronJobs } from './services/cronServices.js';
 
 dotenv.config();
 const app = express();
@@ -30,3 +31,5 @@ mongoose
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch((err) => console.error(err));
+
+  initCronJobs();
