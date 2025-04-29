@@ -4,6 +4,9 @@ import {
   validateUserCredentials,
   generateAuthToken,
 } from "../utils/authUtils.js";
+import userSchema from "../models/User.js";
+import mongoose from "mongoose";
+
 
 const loginUser = async (loginData) => {
   //   console.log({ loginData });
@@ -51,7 +54,6 @@ const loginUser = async (loginData) => {
     };
   }
 };
-
 //create a user
 const createUser = async (userData) => {
   try {
@@ -71,12 +73,12 @@ const createUser = async (userData) => {
       versionKey: false,
     });
     delete userWithoutPassword.password;
-
     return {
       success: true,
       user: userWithoutPassword,
     };
   } catch (error) {
+    console.error(error);
     return {
       success: false,
       error: error.message,
@@ -90,87 +92,87 @@ const getAllUsersWithSubscriptions = async () => {
     const users = await userModel.aggregate([
       {
         $lookup: {
-          from: 'subscriptions',
-          localField: '_id',
-          foreignField: 'user',
-          as: 'subscriptions'
-        }
+          from: "subscriptions",
+          localField: "_id",
+          foreignField: "user",
+          as: "subscriptions",
+        },
       },
       {
         $unwind: {
-          path: '$subscriptions',
-          preserveNullAndEmptyArrays: true
-        }
+          path: "$subscriptions",
+          preserveNullAndEmptyArrays: true,
+        },
       },
       {
         $lookup: {
-          from: 'plans',
-          localField: 'subscriptions.plan',
-          foreignField: '_id',
-          as: 'subscriptions.planDetails'
-        }
+          from: "plans",
+          localField: "subscriptions.plan",
+          foreignField: "_id",
+          as: "subscriptions.planDetails",
+        },
       },
       {
         $addFields: {
-          'subscriptions.plan': {
+          "subscriptions.plan": {
             $ifNull: [
-              { $arrayElemAt: ['$subscriptions.planDetails', 0] },
-              { name: 'Plan Deleted', price: 0, duration: 0 } // Fallback for deleted plans
-            ]
-          }
-        }
+              { $arrayElemAt: ["$subscriptions.planDetails", 0] },
+              { name: "Plan Deleted", price: 0, duration: 0 }, // Fallback for deleted plans
+            ],
+          },
+        },
       },
       {
         $group: {
-          _id: '$_id',
-          name: { $first: '$name' },
-          email: { $first: '$email' },
-          createdAt: { $first: '$createdAt' },
+          _id: "$_id",
+          name: { $first: "$name" },
+          email: { $first: "$email" },
+          createdAt: { $first: "$createdAt" },
           subscriptions: {
             $push: {
               $cond: [
-                { $ifNull: ['$subscriptions._id', false] },
+                { $ifNull: ["$subscriptions._id", false] },
                 {
-                  _id: '$subscriptions._id',
-                  startDate: '$subscriptions.startDate',
-                  endDate: '$subscriptions.endDate',
-                  status: '$subscriptions.status',
-                  paymentId: '$subscriptions.paymentId',
-                  createdAt: '$subscriptions.createdAt',
-                  plan: '$subscriptions.plan'
+                  _id: "$subscriptions._id",
+                  startDate: "$subscriptions.startDate",
+                  endDate: "$subscriptions.endDate",
+                  status: "$subscriptions.status",
+                  paymentId: "$subscriptions.paymentId",
+                  createdAt: "$subscriptions.createdAt",
+                  plan: "$subscriptions.plan",
                 },
-                '$$REMOVE' // Remove null subscriptions
-              ]
-            }
-          }
-        }
+                "$$REMOVE", // Remove null subscriptions
+              ],
+            },
+          },
+        },
       },
       {
         $project: {
           password: 0,
           __v: 0,
-          'subscriptions.planDetails': 0,
-          'subscriptions.plan.__v': 0
-        }
+          "subscriptions.planDetails": 0,
+          "subscriptions.plan.__v": 0,
+        },
       },
       {
-        $sort: { createdAt: -1 } // Sort by newest users first
-      }
+        $sort: { createdAt: -1 }, // Sort by newest users first
+      },
     ]);
 
-    return { 
-      success: true, 
-      users: users.map(user => ({
+    return {
+      success: true,
+      users: users.map((user) => ({
         ...user,
-        subscriptions: user.subscriptions || [] // Ensure subscriptions is always an array
-      }))
+        subscriptions: user.subscriptions || [], // Ensure subscriptions is always an array
+      })),
     };
   } catch (error) {
-    console.error('Aggregation error:', error);
-    return { 
-      success: false, 
-      error: 'Failed to fetch user data',
-      details: error.message 
+    console.error("Aggregation error:", error);
+    return {
+      success: false,
+      error: "Failed to fetch user data",
+      details: error.message,
     };
   }
 };
@@ -243,6 +245,110 @@ const validateUserInput = (req, res, next) => {
   next();
 };
 
+ const getUserProfileWithSubscription = async (userId) => {
+  try {
+
+    const result = await userModel.aggregate([
+      {
+        $match: { _id: new mongoose.Types.ObjectId(userId) }
+      },
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          createdAt: 1
+        }
+      },
+      {
+        $lookup: {
+          from: 'subscriptions',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$user', '$$userId'] },
+                    { $eq: ['$status', 'active'] }
+                  ]
+                }
+              }
+            },
+            {
+              $lookup: {
+                from: 'plans',
+                localField: 'plan',
+                foreignField: '_id',
+                as: 'planDetails'
+              }
+            },
+            {
+              $unwind: '$planDetails'
+            },
+            {
+              $project: {
+                status: 1,
+                startDate: 1,
+                endDate: 1,
+                paymentId: 1,
+                'planDetails.name': 1,
+                'planDetails.price': 1,
+                'planDetails.duration': 1
+              }
+            }
+          ],
+          as: 'subscription'
+        }
+      },
+      {
+        $unwind: {
+          path: '$subscription',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          subscription: {
+            $cond: {
+              if: { $ifNull: ['$subscription', false] },
+              then: {
+                planName: '$subscription.planDetails.name',
+                status: '$subscription.status',
+                startDate: '$subscription.startDate',
+                endDate: '$subscription.endDate',
+                price: '$subscription.planDetails.price',
+                duration: '$subscription.planDetails.duration'
+              },
+              else: null
+            }
+          }
+        }
+      }
+    ]);
+
+    if (!result.length) {
+      return { 
+        success: false, 
+        error: 'User not found' 
+      };
+    }
+
+    return { 
+      success: true, 
+      data: result[0] 
+    };
+
+  } catch (error) {
+    console.error('Profile fetch error:', error);
+    return { 
+      success: false, 
+      error: 'Server error while fetching profile' 
+    };
+  }
+};
+
 export {
   createUser,
   getAllUsersWithSubscriptions,
@@ -251,4 +357,5 @@ export {
   deleteUser,
   loginUser,
   validateUserInput,
+  getUserProfileWithSubscription
 };
