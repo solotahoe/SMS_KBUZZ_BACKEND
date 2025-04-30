@@ -20,7 +20,7 @@ const validateUserInput = async(req, res, next) => {
   };
   // Create a new subscription
   router.post('/create', validateUserInput, async (req, res) => {
-    console.log(req.body)
+    // console.log(req.body)
     const result = await createSubscription(req.body);
     
     if (!result.success) {
