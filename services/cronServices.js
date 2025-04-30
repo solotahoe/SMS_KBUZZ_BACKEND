@@ -7,21 +7,20 @@ export const initCronJobs = () => {
     try {
       const now = new Date();
       
-      // 1. Find subscriptions that just expired
+      //Find subscriptions that just expired
       const expiredSubscriptions = await SubscriptionModel.find({
         endDate: { $lte: now },
         status: 'active'
       }).populate('user', 'email name');
 
-      // 2. Update their status
+      // Update their status
       await SubscriptionModel.updateMany(
         { _id: { $in: expiredSubscriptions.map(s => s._id) } },
         { $set: { status: 'expired' } }
       );
 
-      // 3. Send  email/sms notifications
-     
-
+      // Send  email/sms notifications
+    
       console.log(`Updated ${expiredSubscriptions.length} expired subscriptions`);
 
     } catch (error) {
