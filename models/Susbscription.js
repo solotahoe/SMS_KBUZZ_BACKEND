@@ -5,6 +5,7 @@ const subscription = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true,
+    index: true
   },
   plan: {
     type: mongoose.Schema.Types.ObjectId,
